@@ -1,6 +1,8 @@
 # Mercury crater graph and hollows
 
-**Interactive explorer:** https://michael-s-phillips.github.io/mercury-crater-graph/ (after publication)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23779916.svg)](https://doi.org/10.5281/zenodo.23779916)
+
+**Interactive explorer:** https://michael-s-phillips.github.io/mercury-crater-graph/
 
 This project builds a directed graph of Mercury's impact craters in which every edge records that one crater formed inside an older crater or basin, and it places the hollows of Mercury on that graph. Nodes are the 31,571 craters ≥ 5 km in the Herrick et al. (2018) catalog and 53 basins from Orgel et al. (2020). An edge `A → B` means crater B formed after A because B's center lies inside A's rim and A is at least twice B's diameter. The graph links 14,933 craters to the feature they formed inside, and its longest chain holds four features.
 
