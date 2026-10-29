@@ -1,0 +1,1 @@
+{"summary":{"craters":31571,"basins":53,"nested":14933,"chain_max":4,"hollows":6731,"hosts09":608},"results":{"nested_OR":{"OR":1.85,"ci":[1.54,2.22],"p":5.854480578871281e-11},"inherit_OR":{"OR":2.39,"ci":[1.73,3.29],"p":9.686785322599889e-08},"within_parent":[0.209,0.164,0.20199799745927016]}}

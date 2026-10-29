@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+_scratch/
+_to_delete/
+explorer/tiles/
+._*
+.DS_Store
+RELEASE_PROMPT.md

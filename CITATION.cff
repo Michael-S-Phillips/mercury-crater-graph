@@ -1,0 +1,50 @@
+cff-version: 1.2.0
+message: "If you use this graph, its code, or the explorer, please cite it as below."
+title: "Mercury crater graph and hollows"
+version: 0.1.0
+repository-code: "https://github.com/Michael-S-Phillips/mercury-crater-graph"
+url: "https://michael-s-phillips.github.io/mercury-crater-graph/"
+license:
+  - MIT
+  - CC-BY-4.0
+authors:
+  - family-names: Phillips
+    given-names: Michael
+    affiliation: "Lunar and Planetary Laboratory, University of Arizona"
+keywords:
+  - Mercury
+  - impact craters
+  - hollows
+  - stratigraphy
+  - superposition
+  - relative age
+  - directed graph
+references:
+  - type: article
+    title: "Observations from a global database of impact craters on Mercury with diameters greater than 5 km"
+    authors:
+      - family-names: Herrick
+        given-names: Robert R.
+      - family-names: Bateman
+        given-names: Erin M.
+      - family-names: Crumpacker
+        given-names: Weston G.
+      - family-names: Bates
+        given-names: Daniel
+    journal: "Journal of Geophysical Research: Planets"
+    volume: 123
+    year: 2018
+    doi: 10.1029/2017JE005516
+  - type: article
+    title: "Hollows on Mercury: Creation and analysis of a global reference catalog with deep learning"
+    authors:
+      - family-names: Bickel
+        given-names: Valentin T.
+      - family-names: Deutsch
+        given-names: Ariel N.
+      - family-names: Blewett
+        given-names: David T.
+    journal: "Journal of Geophysical Research: Machine Learning and Computation"
+    volume: 2
+    year: 2025
+    doi: 10.1029/2024JH000431

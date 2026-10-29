@@ -1,0 +1,51 @@
+{
+  "title": "Mercury crater graph and hollows: containment relations among 31,571 craters and 53 basins, with 6,731 hollows",
+  "upload_type": "dataset",
+  "version": "0.1.0",
+  "license": "cc-by-4.0",
+  "description": "A directed graph of Mercury's impact craters in which each edge records that one crater formed inside an older crater or basin. Nodes are the 31,571 craters of at least 5 km in the Herrick et al. (2018) catalog and 53 basins from Orgel et al. (2020). A crater whose center lies inside a feature at least twice its diameter is linked to the smallest such feature; 14,933 craters are linked, and the longest chain holds four features. The 6,731 hollows of Bickel et al. (2025), recomputed with the MESSENGER camera model, are assigned to their host craters. Craters that formed inside an older crater or basin host hollows 1.85 (1.54-2.22) times as often (odds) as isolated craters of the same size, latitude, imaging completeness, and regional hosting rate, and craters inside a hollow-bearing parent host them 2.39 (1.73-3.29) times as often; position within the parent does not change the odds. The record contains the crater table with graph metrics and a first-order depth of origin, the edge list, the analysis records, the inputs needed to rerun the analysis, an example figure, and a self-contained HTML explorer that opens in any browser.",
+  "creators": [
+    {
+      "name": "Phillips, Michael",
+      "affiliation": "Lunar and Planetary Laboratory, University of Arizona"
+    }
+  ],
+  "keywords": [
+    "Mercury",
+    "impact craters",
+    "hollows",
+    "stratigraphy",
+    "superposition",
+    "relative age",
+    "directed graph",
+    "MESSENGER",
+    "MDIS"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "10.1029/2017JE005516",
+      "relation": "isDerivedFrom",
+      "scheme": "doi"
+    },
+    {
+      "identifier": "10.1029/2019JE006212",
+      "relation": "isDerivedFrom",
+      "scheme": "doi"
+    },
+    {
+      "identifier": "10.1029/2024JH000431",
+      "relation": "isDerivedFrom",
+      "scheme": "doi"
+    },
+    {
+      "identifier": "10.1007/s11214-017-0440-y",
+      "relation": "references",
+      "scheme": "doi"
+    },
+    {
+      "identifier": "10.5281/zenodo.23675713",
+      "relation": "references",
+      "scheme": "doi"
+    }
+  ]
+}
