@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mercury Crater Graph</title>
+<meta name="description" content="Interactive map of Mercury&#x27;s craters linked by containment, with the hollows inside them: click a crater to trace the craters and basins it formed inside and the craters that formed inside it.">
+<meta property="og:title" content="Mercury Crater Graph">
+<meta property="og:description" content="Interactive map of Mercury&#x27;s craters linked by containment, with the hollows inside them: click a crater to trace the craters and basins it formed inside and the craters that formed inside it.">
+<style>
+/* page reset (the hosted artifact supplies these itself) */
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); box-sizing: border-box; height: 100%; }
+body { margin: 0; }
+img { max-width: 100%; }
+a { color: inherit; }
+</style>
+</head>
+<body>
+<script src="data/mcg_data.js"></script>
+<script>window.MCG_TILES = {"base": "tiles", "default": "mdis", "layers": [{"id": "mdis", "name": "MDIS monochrome", "maxZ": 4, "credit": "Basemap: MESSENGER MDIS global monochrome mosaic, 166 m/pixel, shown to 333 m/pixel (Denevi et al., 2018)."}, {"id": "color", "name": "MDIS enhanced color", "maxZ": 3, "credit": "Basemap: MESSENGER MDIS enhanced-color global mosaic, 665 m/pixel; low-reflectance material appears dark blue (Denevi et al., 2018)."}]};</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:wght@400;600&display=swap">
+<style>
+/* Layout: map-first workspace. The basemap fills the left; an inspector docks right and reads like a
+   stratigraphic column (oldest at the bottom). Stacks map-over-inspector on phones. */
+:root {
+  --bg: #eef0ef;
+  --panel: #fafbfa;
+  --ink: #16191c;
+  --ink-2: #4b5157;
+  --muted: #7d848a;
+  --line: #d6dad9;
+  --chip: #e7eae9;
+  --older: #e0612e;
+  --younger: #2a78d6;
+  --d0: #9cc3f2; --d1: #4f97ea; --d2: #2069c4; --d3: #123f7e;
+  --host: #e9a91f;
+  --hollow: #ffe24d;
+  --dim: rgba(40, 44, 48, 0.28);
+  --edge: rgba(22, 25, 28, 0.55);
+  --map-tint: rgba(238, 240, 239, 0.06);
+  --focus: #2a78d6;
+  --f-display: "Barlow Semi Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "Source Sans 3", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121416; --panel: #1a1d20; --ink: #eceeed; --ink-2: #b9bfc3; --muted: #858c92;
+    --line: #2d3236; --chip: #262a2e; --older: #ec7a4b; --younger: #4b93ea;
+    --d0: #a9cdf6; --d1: #6aa7ee; --d2: #3987e5; --d3: #c3dbf8; --host: #f2bb3f; --hollow: #ffe76b;
+    --dim: rgba(200, 206, 210, 0.22); --edge: rgba(236, 238, 237, 0.6);
+    --map-tint: rgba(18, 20, 22, 0.2); --focus: #5598e7; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121416; --panel: #1a1d20; --ink: #eceeed; --ink-2: #b9bfc3; --muted: #858c92;
+  --line: #2d3236; --chip: #262a2e; --older: #ec7a4b; --younger: #4b93ea;
+  --d0: #a9cdf6; --d1: #6aa7ee; --d2: #3987e5; --d3: #c3dbf8; --host: #f2bb3f; --hollow: #ffe76b;
+  --dim: rgba(200, 206, 210, 0.22); --edge: rgba(236, 238, 237, 0.6);
+  --map-tint: rgba(18, 20, 22, 0.2); --focus: #5598e7; color-scheme: dark;
+}
+html, body { height: 100%; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.45; }
+.app { height: 100%; display: flex; flex-direction: column; gap: 12px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 14px 16px; box-sizing: border-box; }
+header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 24px; }
+h1 { font-family: var(--f-display); font-weight: 600; font-size: 1.65rem; letter-spacing: 0.01em; margin: 0; line-height: 1.1; text-wrap: balance; }
+.sub { color: var(--ink-2); margin: 4px 0 0; max-width: 78ch; font-size: 0.93rem; }
+.stats { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.86rem; color: var(--ink-2); }
+.stats b { font-family: var(--f-display); font-weight: 600; font-size: 1.15rem; color: var(--ink); font-variant-numeric: tabular-nums; margin-right: 4px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; font-size: 0.88rem; }
+.search { display: flex; gap: 6px; flex: 1 1 260px; max-width: 420px; }
+input[type="search"], select { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; min-width: 0; }
+input[type="search"] { flex: 1; font-family: var(--f-mono); font-size: 0.85rem; }
+button { font: inherit; font-size: 0.86rem; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 11px; cursor: pointer; }
+button:hover { border-color: var(--muted); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+label.tog { display: inline-flex; gap: 6px; align-items: center; color: var(--ink-2); cursor: pointer; }
+.msg { color: var(--older); font-size: 0.85rem; min-height: 1.2em; }
+.work { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 370px; grid-template-rows: minmax(0, 1fr); gap: 12px; min-height: 440px; }
+.mapwrap { position: relative; min-width: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #2a2d30; touch-action: none; }
+canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+canvas.dragging { cursor: grabbing; }
+.zoom { position: absolute; right: 10px; top: 10px; display: flex; flex-direction: column; gap: 4px; }
+.zoom button { width: 34px; height: 34px; padding: 0; font-size: 1.1rem; line-height: 1; }
+.legend { position: absolute; left: 10px; bottom: 10px; background: color-mix(in srgb, var(--panel) 92%, transparent); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; font-size: 0.78rem; color: var(--ink-2); display: grid; gap: 3px; max-width: calc(100% - 70px); }
+.legend .row { display: flex; align-items: center; gap: 7px 10px; flex-wrap: wrap; }
+.sw { width: 11px; height: 11px; border-radius: 50%; border: 2px solid currentColor; box-sizing: border-box; display: inline-block; vertical-align: -1px; }
+.sw.dash { border-style: dashed; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--hollow); box-shadow: 0 0 0 1px rgba(0,0,0,0.55); display: inline-block; vertical-align: 1px; }
+.coord:empty { display: none; }
+.coord { position: absolute; right: 10px; bottom: 10px; font-family: var(--f-mono); font-size: 0.74rem; color: var(--ink-2); background: color-mix(in srgb, var(--panel) 88%, transparent); border-radius: 4px; padding: 2px 6px; font-variant-numeric: tabular-nums; }
+aside { min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; overflow: auto; }
+.eyebrow { font-family: var(--f-display); font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.74rem; color: var(--muted); margin: 0 0 4px; }
+.cid { font-family: var(--f-mono); font-weight: 500; font-size: 1.15rem; margin: 0; }
+.cname { font-family: var(--f-display); font-weight: 600; font-size: 1.35rem; margin: 0; line-height: 1.15; }
+dl.facts { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 8px 0 0; font-size: 0.88rem; }
+dl.facts dt { color: var(--muted); }
+dl.facts dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; }
+.counts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.count { border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; }
+.count .n { font-family: var(--f-display); font-weight: 600; font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+.count.old .n { color: var(--older); } .count.young .n { color: var(--younger); } .count.hol .n { color: var(--host); }
+.count .l { font-size: 0.78rem; color: var(--ink-2); }
+.column { display: flex; flex-direction: column; gap: 0; }
+.layer { box-sizing: border-box; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; border: 1px solid var(--line); border-radius: 4px; padding: 5px 9px; font-size: 0.84rem; background: var(--bg); cursor: pointer; text-align: left; width: 100%; }
+.layer .id { font-family: var(--f-mono); font-size: 0.8rem; }
+.layer .d { color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.layer.older { border-left: 4px solid var(--older); }
+.layer.younger { border-left: 4px solid var(--younger); }
+.layer.sel { border: 2px solid var(--ink); font-weight: 600; background: var(--panel); }
+.hb { display: inline-block; font-size: 0.7rem; color: var(--host); border: 1px solid var(--host); border-radius: 3px; padding: 0 3px; margin-left: 4px; }
+.link { font-size: 0.72rem; color: var(--muted); padding: 2px 0 2px 14px; border-left: 1px dashed var(--line); margin-left: 12px; }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip { font-family: var(--f-mono); font-size: 0.76rem; background: var(--chip); border: 1px solid transparent; border-radius: 4px; padding: 2px 6px; cursor: pointer; color: var(--ink); }
+.chip:hover { border-color: var(--muted); }
+.chip small { font-family: var(--f-body); color: var(--muted); margin-left: 4px; }
+.empty { color: var(--muted); font-size: 0.85rem; }
+.note { font-size: 0.82rem; color: var(--ink-2); margin: 6px 0 0; max-width: 60ch; }
+details { font-size: 0.86rem; color: var(--ink-2); border-top: 1px solid var(--line); padding-top: 10px; }
+summary { cursor: pointer; color: var(--ink); font-weight: 600; }
+details p { margin: 6px 0; max-width: 65ch; }
+.foot { font-size: 0.78rem; color: var(--muted); }
+@media (max-width: 860px) {
+  .app { height: auto; }
+  .work { grid-template-columns: 1fr; grid-template-rows: auto auto; }
+  .mapwrap { height: 58vh; min-height: 340px; }
+  aside { overflow: visible; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="app">
+  <header>
+    <div>
+      <h1>Mercury Crater Graph and Hollows</h1>
+      <p class="sub">Each arrow points from a crater or basin to a younger crater that formed inside it. Click a crater to trace the features it formed inside (older, orange) and the craters that formed inside it (younger, blue). Gold rings mark craters with hollows inside 0.9 radii; yellow dots are hollows.</p>
+    </div>
+    <div class="stats" id="stats" aria-live="polite"><span>Loading craters…</span></div>
+  </header>
+
+  <div class="toolbar">
+    <form class="search" id="searchForm" role="search">
+      <input type="search" id="q" placeholder="Crater name, Herrick ID, or lat, lon" aria-label="Find a crater by name, catalog ID, or coordinates" autocomplete="off">
+      <button type="submit" id="goBtn">Find</button>
+    </form>
+    <label class="tog"><input type="checkbox" id="showEdges" checked> arrows</label>
+    <label class="tog"><input type="checkbox" id="showHol" checked> hollows</label>
+    <label class="tog"><input type="checkbox" id="hostOnly"> only craters with hollows</label>
+    <label class="tog">min. diameter
+      <select id="minD" aria-label="Minimum crater diameter shown">
+        <option value="0">all (≥5 km)</option><option value="10">10 km</option><option value="20">20 km</option>
+        <option value="50">50 km</option><option value="100">100 km</option>
+      </select></label>
+    <label class="tog" id="baseWrap" hidden>basemap
+      <select id="basemap" aria-label="Basemap"></select></label>
+    <button type="button" id="clearBtn">Clear selection</button>
+    <span class="msg" id="msg" role="status"></span>
+  </div>
+
+  <div class="work">
+    <div class="mapwrap" id="mapwrap">
+      <canvas id="map" aria-label="Map of Mercury craters and hollows over a MESSENGER basemap. Drag to pan, scroll or pinch to zoom, click a crater to select it."></canvas>
+      <div class="zoom"><button type="button" id="zin" aria-label="Zoom in">+</button><button type="button" id="zout" aria-label="Zoom out">−</button></div>
+      <div class="legend" id="legend">
+        <div class="row" id="legDepth">
+          <span><span class="sw" style="color:var(--d0)"></span> isolated</span>
+          <span><span class="sw" style="color:var(--d1)"></span> inside 1</span>
+          <span><span class="sw" style="color:var(--d2)"></span> 2</span>
+          <span><span class="sw" style="color:var(--d3)"></span> 3 older features</span>
+        </div>
+        <div class="row" id="legSel" hidden>
+          <span><span class="sw" style="color:var(--older)"></span> older</span>
+          <span><span class="sw" style="color:var(--younger)"></span> younger</span>
+          <span><span class="sw" style="color:var(--ink)"></span> selected</span>
+        </div>
+        <div class="row">
+          <span><span class="sw" style="color:var(--host)"></span> has hollows</span>
+          <span><span class="dot"></span> hollow</span>
+          <span><span class="sw dash" style="color:var(--muted)"></span> basin</span>
+        </div>
+      </div>
+      <div class="coord" id="coord"></div>
+    </div>
+
+    <aside id="panel" aria-live="polite">
+      <div id="detail"><p class="empty">Loading…</p></div>
+      <details>
+        <summary>How the graph was built</summary>
+        <p><b>Containment.</b> A crater whose center lies inside a crater or basin at least twice its diameter formed after it, because the larger impact would have erased an earlier crater inside its rim. Each crater's parent is the smallest feature that contains it, so the graph is a forest of trees. Rim overlaps are not ordered, because the crater catalog has no rim-arc completeness.</p>
+        <p><b>Position.</b> A child's center distance in parent radii places it on the parent's peak (&lt; 0.2), floor (0.2–0.6), or wall (≥ 0.6).</p>
+        <p><b>Hollows.</b> Hollows are the georeferenced detections of Bickel et al. (2025), merged into one entry per hollow. A crater has hollows when at least one hollow assigned to it lies inside 0.9 of its radius.</p>
+        <p><b>Depth of origin.</b> The deepest level a crater exposes is its excavation depth or stratigraphic uplift, whichever is larger, plus the depth of origin of the parent surface it formed on. These are first-order scalings (Croft, 1985; Cintala and Grieve, 1998).</p>
+        <p id="results"></p>
+      </details>
+      <p class="foot" id="foot">Craters: Herrick et al. (2018). Basins: Orgel et al. (2020). Hollows: Bickel et al. (2025), georeferenced. Code and data: <a href="https://github.com/Michael-S-Phillips/mercury-crater-graph">https://github.com/Michael-S-Phillips/mercury-crater-graph</a>. <span id="baseCredit">Basemap: MESSENGER MDIS global mosaic (Denevi et al., 2018).</span></p>
+    </aside>
+  </div>
+</div>
+
+<script>
+(() => {
+  const KPD = 2439.4 * Math.PI / 180;           // km per degree on Mercury
+  const ZONES = ["", "peak", "floor", "wall"];
+  const PRES = ["not classified", "degraded", "intermediate", "fresh"];
+  const canvas = document.getElementById("map");
+  const ctx = canvas.getContext("2d");
+  const wrap = document.getElementById("mapwrap");
+  const $ = (id) => document.getElementById(id);
+  let N = null, E = null, HOL = null, META = null, relief = null;
+  let lat, lon, D, n, hlat, hlon, nh;
+  let pred, succ;
+  let view = { lon: 161.4, lat: 30, s: 6 };       // s = px per degree
+  let sel = -1, anc = null, desc = null, dirty = true;
+  let colors = {};
+  const filt = { edges: true, hol: true, hostOnly: false, minD: 0 };
+
+  function readColors() {
+    const cs = getComputedStyle(document.documentElement);
+    for (const k of ["older", "younger", "d0", "d1", "d2", "d3", "host", "hollow", "dim", "edge", "ink", "map-tint", "panel", "muted"])
+      colors[k] = cs.getPropertyValue("--" + k).trim();
+    dirty = true;
+  }
+  readColors();
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", readColors);
+  new MutationObserver(readColors).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+  const fmt = (x) => x.toLocaleString("en-US");
+
+  // A standalone build defines window.MCG_DATA = {nodes, edges, hollows, meta, relief} inline,
+  // so the page also works when opened straight from disk.
+  const INLINE = window.MCG_DATA || null;
+  async function load() {
+    try {
+      if (INLINE) { N = INLINE.nodes; E = INLINE.edges; HOL = INLINE.hollows; META = INLINE.meta; }
+      else {
+        const [a, b, c, d] = await Promise.all(["data/nodes.json", "data/edges.json", "data/hollows.json", "data/meta.json"].map((u) => fetch(u).then((r) => {
+          if (!r.ok) throw new Error(u + " " + r.status); return r.json(); })));
+        N = a; E = b; HOL = c; META = d;
+      }
+    } catch (err) {
+      $("detail").innerHTML = location.protocol === "file:"
+        ? '<p class="empty">The crater data did not load. Open explorer/index.html or dist/mercury_crater_graph_explorer.html instead of this page; they carry their data with them.</p>'
+        : '<p class="empty">The crater data did not load. Reload the page to try again.</p>';
+      return;
+    }
+    n = N.id.length;
+    lat = Float32Array.from(N.lat, (v) => v / 1e4);
+    lon = Float32Array.from(N.lon, (v) => v / 1e4);
+    D = Float32Array.from(N.D, (v) => v / 100);
+    nh = HOL.lat.length;
+    hlat = Float32Array.from(HOL.lat, (v) => v / 1e4);
+    hlon = Float32Array.from(HOL.lon, (v) => v / 1e4);
+    buildAdj(); buildGrid(); fillStats(); fillResults();
+    const img = new Image();
+    img.onload = () => { relief = img; dirty = true; };
+    img.src = INLINE && INLINE.relief ? INLINE.relief : "data/relief_mdis.jpg";
+    const hash = decodeURIComponent((location.hash || "").slice(1));
+    let start = idIndex.get(hash);
+    if (start === undefined) start = nameIndex.get("sander");
+    if (start !== undefined) select(start, true); else renderDetail();
+    resize(); loop();
+  }
+
+  let idIndex = new Map(), nameIndex = new Map();
+  function buildAdj() {
+    for (let i = 0; i < n; i++) { idIndex.set(N.id[i], i); if (N.name[i]) nameIndex.set(N.name[i].toLowerCase(), i); }
+    const m = E.o.length;
+    const pc = new Int32Array(n + 1), sc = new Int32Array(n + 1);
+    for (let k = 0; k < m; k++) { pc[E.y[k] + 1]++; sc[E.o[k] + 1]++; }
+    for (let i = 0; i < n; i++) { pc[i + 1] += pc[i]; sc[i + 1] += sc[i]; }
+    const pv = new Int32Array(m), sv = new Int32Array(m);
+    const pf = pc.slice(), sf = sc.slice();
+    for (let k = 0; k < m; k++) { const o = E.o[k], y = E.y[k]; pv[pf[y]++] = o; sv[sf[o]++] = y; }
+    pred = { off: pc, v: pv }; succ = { off: sc, v: sv };
+  }
+
+  // 1-degree bins for picking
+  let grid;
+  function buildGrid() {
+    grid = new Map();
+    for (let i = 0; i < n; i++) {
+      const r = D[i] / 2 / KPD, cl = Math.max(Math.cos(lat[i] * Math.PI / 180), 0.05);
+      const la0 = Math.floor(lat[i] - r), la1 = Math.floor(lat[i] + r);
+      const lo0 = Math.floor(lon[i] - r / cl), lo1 = Math.floor(lon[i] + r / cl);
+      if ((la1 - la0 + 1) * (lo1 - lo0 + 1) > 20000) continue;   // the largest basins are picked by center only
+      for (let a = la0; a <= la1; a++) for (let b = lo0; b <= lo1; b++) {
+        const key = a * 1000 + ((b % 360) + 360) % 360;
+        let arr = grid.get(key); if (!arr) grid.set(key, arr = []); arr.push(i);
+      }
+    }
+  }
+
+  function fillStats() {
+    const s = META.summary;
+    $("stats").innerHTML =
+      `<span><b>${fmt(s.craters)}</b>craters ≥ 5 km</span>` +
+      `<span><b>${fmt(s.nested)}</b>inside an older crater or basin</span>` +
+      `<span><b>${fmt(s.hollows)}</b>hollows</span>` +
+      `<span><b>${fmt(s.hosts09)}</b>craters with hollows</span>` +
+      `<span><b>${s.chain_max}</b>features in the longest chain</span>`;
+  }
+  function fillResults() {
+    const r = META.results; if (!r) return;
+    const a = r.nested_OR, b = r.inherit_OR;
+    $("results").innerHTML = `<b>What the graph shows.</b> Craters inside an older crater or basin have hollows ${a.OR.toFixed(2)} (${a.ci[0].toFixed(2)}–${a.ci[1].toFixed(2)}) times as often (odds) as isolated craters of the same size, latitude, imaging completeness, and regional rate. Craters inside a parent crater that has hollows have them ${b.OR.toFixed(2)} (${b.ci[0].toFixed(2)}–${b.ci[1].toFixed(2)}) times as often as craters inside other parents. Within one parent, position (peak, floor, or wall) makes no measurable difference.`;
+  }
+
+  function closure(start, adj) {
+    const seen = new Uint8Array(n);
+    const stack = [start];
+    while (stack.length) {
+      const u = stack.pop();
+      for (let k = adj.off[u]; k < adj.off[u + 1]; k++) { const w = adj.v[k]; if (!seen[w]) { seen[w] = 1; stack.push(w); } }
+    }
+    return seen;
+  }
+
+  function select(i, center) {
+    sel = i;
+    anc = i >= 0 ? closure(i, pred) : null;
+    desc = i >= 0 ? closure(i, succ) : null;
+    $("legDepth").hidden = i >= 0; $("legSel").hidden = i < 0;
+    if (i >= 0 && center) {
+      view.lon = lon[i]; view.lat = lat[i];
+      const span = Math.max(D[i] * 2.6 / KPD, 0.8);
+      view.s = Math.min(Math.max(Math.min(canvas.clientWidth || 600, canvas.clientHeight || 500) / span, 2), 3000);
+    }
+    renderDetail(); dirty = true;
+  }
+
+  function chainBelow(i) { const out = []; let u = N.parent[i]; while (u >= 0) { out.push(u); u = N.parent[u]; } return out; }
+  function chainAbove(i) { const out = []; let u = i;
+    while (N.height[u] > 0) { let next = -1;
+      for (let k = succ.off[u]; k < succ.off[u + 1]; k++) if (N.height[succ.v[k]] === N.height[u] - 1) { next = succ.v[k]; break; }
+      if (next < 0) break; out.push(next); u = next; }
+    return out; }
+
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const dtxt = (d) => d >= 10 ? d.toFixed(0) + " km" : d.toFixed(1) + " km";
+  const ll = (i) => `${Math.abs(lat[i]).toFixed(3)}°${lat[i] < 0 ? "S" : "N"}, ${lon[i].toFixed(3)}°E`;
+  const label = (i) => N.name[i] ? `${esc(N.name[i])}` : esc(N.id[i]);
+  const hb = (i) => N.n09[i] > 0 ? '<span class="hb">hollows</span>' : "";
+
+  function renderDetail() {
+    const el = $("detail");
+    if (sel < 0) {
+      el.innerHTML = '<p class="eyebrow">No crater selected</p><p class="empty">Click any circle on the map, or search for a crater name or Herrick catalog ID. The inspector then shows its stratigraphic column: the chain of features it formed inside, below, and the longest chain of craters inside it, above.</p>';
+      return;
+    }
+    const i = sel, basin = N.kind[i] === 1;
+    const below = chainBelow(i), above = chainAbove(i);
+    let col = "";
+    for (let k = above.length - 1; k >= 0; k--) {
+      const v = above[k];
+      col += `<button type="button" class="layer younger" data-i="${v}"><span class="id">${label(v)}${hb(v)}</span><span class="d">${dtxt(D[v])}</span></button>`;
+      col += `<div class="link">formed inside ↓ · ${ZONES[N.zone[v]]}</div>`;
+    }
+    col += `<div class="layer sel"><span class="id">${label(i)}${hb(i)}</span><span class="d">${dtxt(D[i])}</span></div>`;
+    for (let k = 0; k < below.length; k++) {
+      const v = below[k], child = k === 0 ? i : below[k - 1];
+      col += `<div class="link">formed inside ↓ · ${ZONES[N.zone[child]]}</div>`;
+      col += `<button type="button" class="layer older" data-i="${v}"><span class="id">${label(v)}${hb(v)}</span><span class="d">${dtxt(D[v])}</span></button>`;
+    }
+    let kids = "", c = 0;
+    for (let k = succ.off[i]; k < succ.off[i + 1]; k++) { const v = succ.v[k]; c++;
+      if (c <= 40) kids += `<button type="button" class="chip" data-i="${v}">${label(v)}<small>${dtxt(D[v])} · ${ZONES[N.zone[v]]}${N.n09[v] > 0 ? " · hollows" : ""}</small></button>`; }
+    if (c > 40) kids += `<span class="empty">+${c - 40} more</span>`;
+    const p = N.parent[i];
+    const pos = p >= 0 ? `${ZONES[N.zone[i]]} of ${label(p)}, ${(N.rho[i] / 1000).toFixed(2)} radii from its center` : "not inside an older crater or basin";
+    const depth = basin ? "" : `<dt>Depth of origin (first-order)</dt><dd>${N.fillOnly[i] ? "excavates only the parent's fill" : `${(N.zMax[i] / 100).toFixed(1)} km (own ${(N.zOwn[i] / 100).toFixed(1)} km)`}</dd>`;
+    el.innerHTML = `
+      <p class="eyebrow">Selected ${basin ? "basin" : "crater"}</p>
+      ${N.name[i] ? `<p class="cname">${esc(N.name[i])}</p>` : ""}
+      <p class="cid">${basin ? "Orgel et al. (2020) basin" : "Herrick ID " + esc(N.id[i])}</p>
+      <dl class="facts">
+        <dt>Diameter</dt><dd>${D[i].toFixed(1)} km</dd>
+        <dt>Center</dt><dd>${ll(i)}</dd>
+        ${basin ? "" : `<dt>Preservation</dt><dd>${PRES[N.pres[i]]}</dd>`}
+        <dt>Position</dt><dd>${pos}</dd>
+        <dt>Hollows</dt><dd>${fmt(N.n09[i])} inside 0.9 radii${N.nAll[i] > N.n09[i] ? `, ${fmt(N.nAll[i])} assigned in all` : ""}</dd>
+        ${depth}
+      </dl>
+      <div class="counts" style="margin-top:12px">
+        <div class="count old"><div class="n">${fmt(below.length)}</div><div class="l">older features it formed inside</div></div>
+        <div class="count young"><div class="n">${fmt(N.nDesc[i])}</div><div class="l">younger craters inside it, ${fmt(N.nDescHost[i])} with hollows</div></div>
+      </div>
+      <div style="margin-top:14px"><p class="eyebrow">Stratigraphic column · oldest at bottom</p>
+        <div class="column">${col}</div></div>
+      <div style="margin-top:14px"><p class="eyebrow">Craters directly inside it</p>${c ? `<div class="chips">${kids}</div>` : '<p class="empty">None cataloged (≥ 5 km).</p>'}</div>`;
+    el.querySelectorAll("[data-i]").forEach((b) => b.addEventListener("click", () => select(+b.dataset.i, true)));
+  }
+
+  // ---------------- drawing ----------------
+  function resize() {
+    const r = wrap.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(r.width * dpr); canvas.height = Math.round(r.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); dirty = true;
+  }
+  new ResizeObserver(resize).observe(wrap);
+
+  const W = () => canvas.clientWidth, H = () => canvas.clientHeight;
+  const dLon = (x) => ((x - view.lon + 540) % 360) - 180;
+  const sx = (lo) => W() / 2 + dLon(lo) * view.s;
+  const sy = (la) => H() / 2 - (la - view.lat) * view.s;
+
+  // ---------------- tiled basemap (full builds only) ----------------
+  // Tiles: level z has 8 * 2^z px/degree; 360 px tiles span 45 / 2^z degrees;
+  // rows from 90N southward, columns from 0E eastward: <base>/<layer>/<z>/<r>/<c>.jpg
+  const TILES = window.MCG_TILES || null;
+  let layer = TILES ? TILES.layers.find((l) => l.id === TILES.default) || TILES.layers[0] : null;
+  const tiles = new Map();
+  const levelStats = {};
+  function effMaxZ(l) {
+    let z = l.maxZ;
+    while (z > 0) { const st = levelStats[`${l.id}/${z}`]; if (st && st.hit === 0 && st.miss >= 6) z--; else break; }
+    return z;
+  }
+  function getTile(l, z, r, c, request) {
+    const k = `${l.id}/${z}/${r}/${c}`;
+    let t = tiles.get(k);
+    if (!t && request) {
+      t = { img: new Image(), ok: false, missing: false };
+      const st = levelStats[`${l.id}/${z}`] || (levelStats[`${l.id}/${z}`] = { hit: 0, miss: 0 });
+      t.img.onload = () => { t.ok = true; st.hit++; dirty = true; };
+      t.img.onerror = () => { t.missing = true; st.miss++; dirty = true; };
+      t.img.src = `${TILES.base}/${l.id}/${z}/${r}/${c}.jpg`;
+      tiles.set(k, t);
+      if (tiles.size > 900) { let m = tiles.size - 700; for (const key of tiles.keys()) { if (m-- <= 0) break; tiles.delete(key); } }
+    }
+    return t;
+  }
+  function tileLevelZero(l) {
+    for (let r = 0; r < 4; r++) for (let c = 0; c < 8; c++) { const t = getTile(l, 0, r, c, true); if (!t.ok && !t.missing) return false; }
+    return true;
+  }
+  function drawTiles(w, h) {
+    const dpr = window.devicePixelRatio || 1;
+    const zt = Math.max(0, Math.min(effMaxZ(layer), Math.ceil(Math.log2(view.s * dpr / 8))));
+    const span = 45 / 2 ** zt, nrow = 4 * 2 ** zt, ncol = 8 * 2 ** zt;
+    const lat1 = view.lat + h / 2 / view.s, lat0 = view.lat - h / 2 / view.s;
+    const r0 = Math.max(0, Math.floor((90 - lat1) / span)), r1 = Math.min(nrow - 1, Math.floor((90 - lat0) / span));
+    const i0 = Math.floor((view.lon - w / 2 / view.s) / span), i1 = Math.floor((view.lon + w / 2 / view.s) / span);
+    if ((r1 - r0 + 1) * (i1 - i0 + 1) > 400) return;
+    const size = span * view.s;
+    for (let r = r0; r <= r1; r++) {
+      const y = h / 2 - (90 - r * span - view.lat) * view.s;
+      for (let i = i0; i <= i1; i++) {
+        const c = ((i % ncol) + ncol) % ncol;
+        const x = w / 2 + (i * span - view.lon) * view.s;
+        let drawn = false;
+        for (let up = 0; up <= zt && !drawn; up++) {
+          const z = zt - up, pr = r >> up, pc = c >> up;
+          const t = getTile(layer, z, pr, pc, up === 0 || z === 0);
+          if (t && t.ok) {
+            const sub = 360 >> up, sxp = (c - (pc << up)) * sub, syp = (r - (pr << up)) * sub;
+            ctx.drawImage(t.img, sxp, syp, sub, sub, Math.floor(x), Math.floor(y), Math.ceil(size) + 1, Math.ceil(size) + 1);
+            drawn = true;
+          }
+        }
+      }
+    }
+  }
+
+  function visible(i) {
+    if (D[i] < filt.minD && i !== sel) return false;
+    if (filt.hostOnly && N.n09[i] === 0 && i !== sel && !(sel >= 0 && (anc[i] || desc[i]))) return false;
+    return true;
+  }
+
+  function draw() {
+    const w = W(), h = H();
+    ctx.fillStyle = "#2a2d30"; ctx.fillRect(0, 0, w, h);
+    ctx.imageSmoothingEnabled = true;
+    if (relief && !(layer && tileLevelZero(layer))) {
+      const iw = 360 * view.s, ih = 180 * view.s;
+      const y0 = h / 2 - (90 - view.lat) * view.s;
+      let x0 = w / 2 - view.lon * view.s;
+      x0 = ((x0 % iw) + iw) % iw - iw;
+      for (let x = x0; x < w; x += iw) ctx.drawImage(relief, x, y0, iw, ih);
+    }
+    if (layer) drawTiles(w, h);
+    ctx.fillStyle = colors["map-tint"]; ctx.fillRect(0, 0, w, h);
+    if (!N) return;
+    const dep = [colors.d0, colors.d1, colors.d2, colors.d3];
+    const latMin = view.lat - h / 2 / view.s - 1, latMax = view.lat + h / 2 / view.s + 1;
+    const halfLon = w / 2 / view.s + 1;
+    const hasSel = sel >= 0;
+    // craters: unrelated first, related on top
+    for (let pass = 0; pass < 2; pass++) {
+      for (let i = 0; i < n; i++) {
+        if (!visible(i)) continue;
+        const la = lat[i];
+        const rr = D[i] / 2 / KPD;
+        if (la + rr < latMin || la - rr > latMax) continue;
+        const dl = dLon(lon[i]);
+        const cl = Math.max(Math.cos(la * Math.PI / 180), 0.05);
+        if (Math.abs(dl) - rr / cl > halfLon) continue;
+        const related = hasSel && (i === sel || anc[i] || desc[i]);
+        if (pass === 0 && related) continue;
+        if (pass === 1 && !related) continue;
+        let c;
+        if (!hasSel) c = N.n09[i] > 0 ? colors.host : dep[Math.min(N.depth[i], 3)];
+        else if (i === sel) c = colors.ink;
+        else if (anc[i]) c = colors.older;
+        else if (desc[i]) c = colors.younger;
+        else c = N.n09[i] > 0 ? colors.host : colors.dim;
+        const x = w / 2 + dl * view.s, y = h / 2 - (la - view.lat) * view.s;
+        const ry = rr * view.s, rx = ry / cl;
+        if (ry < 1.6) { ctx.fillStyle = c; const q = related || N.n09[i] > 0 ? 3 : 2; ctx.fillRect(x - q / 2, y - q / 2, q, q); continue; }
+        ctx.strokeStyle = c;
+        ctx.lineWidth = i === sel ? 2.8 : related ? 1.9 : N.n09[i] > 0 ? 1.8 : 1.1;
+        ctx.setLineDash(N.kind[i] === 1 ? [7, 5] : []);
+        ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); ctx.stroke();
+        if (hasSel && related && N.n09[i] > 0 && i !== sel) {      // a gold tick marks related craters with hollows
+          ctx.setLineDash([]); ctx.strokeStyle = colors.host; ctx.lineWidth = 1.4;
+          ctx.beginPath(); ctx.ellipse(x, y, rx + 3, ry + 3, 0, 0, Math.PI * 2); ctx.stroke();
+        }
+      }
+    }
+    ctx.setLineDash([]);
+    // hollows
+    if (filt.hol) {
+      const q = view.s >= 60 ? 2.6 : view.s >= 15 ? 2 : 1.3;
+      ctx.fillStyle = colors.hollow; ctx.strokeStyle = "rgba(0,0,0,0.6)"; ctx.lineWidth = 0.8;
+      for (let j = 0; j < nh; j++) {
+        const la = hlat[j]; if (la < latMin || la > latMax) continue;
+        const dl = dLon(hlon[j]); if (Math.abs(dl) > halfLon) continue;
+        const x = w / 2 + dl * view.s, y = h / 2 - (la - view.lat) * view.s;
+        ctx.beginPath(); ctx.arc(x, y, q, 0, Math.PI * 2); ctx.fill(); if (q >= 2) ctx.stroke();
+      }
+    }
+    // arrows: all visible when zoomed in; the selected crater's lineage always
+    if (filt.edges) {
+      const showAll = view.s >= 30;
+      ctx.lineWidth = 1.1;
+      const m = E.o.length;
+      for (let k = 0; k < m; k++) {
+        const o = E.o[k], y = E.y[k];
+        const lineage = hasSel && ((o === sel || anc[o]) && (y === sel || anc[y]) || (o === sel || desc[o]) && (y === sel || desc[y]));
+        if (!lineage && !(showAll && !hasSel)) continue;
+        if (!visible(o) || !visible(y)) continue;
+        const la1 = lat[o], la2 = lat[y];
+        if ((la1 < latMin && la2 < latMin) || (la1 > latMax && la2 > latMax)) continue;
+        const x1 = sx(lon[o]), y1 = sy(la1), x2 = sx(lon[y]), y2 = sy(la2);
+        if (Math.max(x1, x2) < -50 || Math.min(x1, x2) > w + 50) continue;
+        if (Math.abs(x2 - x1) > w * 2) continue;
+        const col = lineage ? (anc[y] || y === sel ? colors.older : colors.younger) : colors.edge;
+        arrow(x1, y1, x2, y2, col);
+      }
+    }
+  }
+
+  function arrow(x1, y1, x2, y2, col) {
+    const dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy);
+    if (L < 4) return;
+    ctx.strokeStyle = col; ctx.fillStyle = col;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    const ux = dx / L, uy = dy / L, a = 6;
+    ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - a * ux + a * 0.45 * uy, y2 - a * uy - a * 0.45 * ux);
+    ctx.lineTo(x2 - a * ux - a * 0.45 * uy, y2 - a * uy + a * 0.45 * ux); ctx.closePath(); ctx.fill();
+  }
+
+  function loop() { if (dirty) { dirty = false; draw(); } requestAnimationFrame(loop); }
+
+  // ---------------- interaction ----------------
+  const pointers = new Map(); let dragMoved = false, pinch0 = null;
+  canvas.addEventListener("pointerdown", (e) => {
+    canvas.setPointerCapture(e.pointerId); pointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
+    dragMoved = false; canvas.classList.add("dragging");
+    if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinch0 = { d: Math.hypot(a.x - b.x, a.y - b.y), s: view.s }; }
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    const lo = view.lon + (e.offsetX - W() / 2) / view.s, la = view.lat - (e.offsetY - H() / 2) / view.s;
+    $("coord").textContent = `${la.toFixed(2)}°, ${(((lo % 360) + 360) % 360).toFixed(2)}°E`;
+    const p = pointers.get(e.pointerId); if (!p) return;
+    if (pointers.size === 2 && pinch0) {
+      p.x = e.offsetX; p.y = e.offsetY; const [a, b] = [...pointers.values()];
+      view.s = clampS(pinch0.s * Math.hypot(a.x - b.x, a.y - b.y) / pinch0.d); dragMoved = true; dirty = true; return;
+    }
+    const dx = e.offsetX - p.x, dy = e.offsetY - p.y;
+    if (Math.abs(dx) + Math.abs(dy) > 3) dragMoved = true;
+    view.lon -= dx / view.s; view.lat = Math.max(-89, Math.min(89, view.lat + dy / view.s));
+    p.x = e.offsetX; p.y = e.offsetY; dirty = true;
+  });
+  const end = (e) => {
+    const was = pointers.size; pointers.delete(e.pointerId); canvas.classList.remove("dragging");
+    if (pointers.size < 2) pinch0 = null;
+    if (e.type === "pointerup" && was === 1 && !dragMoved) pick(e.offsetX, e.offsetY);
+  };
+  canvas.addEventListener("pointerup", end); canvas.addEventListener("pointercancel", end);
+  const clampS = (s) => Math.max(1.5, Math.min(4000, s));
+  function zoomAt(f, px, py) {
+    const lo = view.lon + (px - W() / 2) / view.s, la = view.lat - (py - H() / 2) / view.s;
+    view.s = clampS(view.s * f);
+    view.lon = lo - (px - W() / 2) / view.s; view.lat = Math.max(-89, Math.min(89, la + (py - H() / 2) / view.s));
+    dirty = true;
+  }
+  canvas.addEventListener("wheel", (e) => { e.preventDefault(); zoomAt(Math.exp(-e.deltaY * 0.0015), e.offsetX, e.offsetY); }, { passive: false });
+  $("zin").onclick = () => zoomAt(1.6, W() / 2, H() / 2);
+  $("zout").onclick = () => zoomAt(1 / 1.6, W() / 2, H() / 2);
+
+  // a crater center within 10 px, else the smallest crater containing the point
+  function pick(px, py) {
+    if (!N) return;
+    const lo = view.lon + (px - W() / 2) / view.s, la = view.lat - (py - H() / 2) / view.s;
+    const key = Math.floor(la) * 1000 + ((Math.floor(lo) % 360) + 360) % 360;
+    let best = -1, bestD = Infinity, near = -1, nearPx = 10;
+    const cand = (grid.get(key) || []).slice();
+    for (let i = 0; i < n; i++) if (D[i] > 1500) cand.push(i);     // the largest basins are not binned
+    for (const i of cand) {
+      if (!visible(i)) continue;
+      const cl = Math.max(Math.cos(lat[i] * Math.PI / 180), 0.05);
+      const dkm = Math.hypot(((lo - lon[i] + 540) % 360 - 180) * cl * KPD, (la - lat[i]) * KPD);
+      if (dkm <= D[i] / 2 && D[i] < bestD) { best = i; bestD = D[i]; }
+      const dpx = Math.hypot(sx(lon[i]) - px, sy(lat[i]) - py);
+      if (dpx < nearPx) { nearPx = dpx; near = i; }
+    }
+    const i = near >= 0 && (best < 0 || D[near] < bestD) ? near : best;
+    select(i);
+  }
+
+  $("searchForm").addEventListener("submit", (e) => {
+    e.preventDefault(); const q = $("q").value.trim(); $("msg").textContent = "";
+    if (!q || !N) return;
+    if (idIndex.has(q)) { select(idIndex.get(q), true); return; }
+    if (nameIndex.has(q.toLowerCase())) { select(nameIndex.get(q.toLowerCase()), true); return; }
+    const m = q.match(/^\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*$/);
+    if (m) {
+      const la = +m[1], lo = ((+m[2] % 360) + 360) % 360; let best = -1, bd = Infinity;
+      for (let i = 0; i < n; i++) { const cl = Math.cos(la * Math.PI / 180);
+        const d = Math.hypot(((lon[i] - lo + 540) % 360 - 180) * cl, lat[i] - la); if (d < bd) { bd = d; best = i; } }
+      if (best >= 0) { select(best, true); $("msg").textContent = bd > 1 ? `Nearest cataloged crater is ${(bd * KPD).toFixed(0)} km away.` : ""; }
+      return;
+    }
+    const part = [...nameIndex.keys()].find((k) => k.startsWith(q.toLowerCase()));
+    if (part) { select(nameIndex.get(part), true); return; }
+    $("msg").textContent = "No crater with that name or ID. Herrick IDs look like 200223; names like Sander or Raditladi.";
+  });
+  $("clearBtn").onclick = () => select(-1);
+  if (TILES) {
+    const s = $("basemap");
+    for (const l of TILES.layers) { const o = document.createElement("option"); o.value = l.id; o.textContent = l.name; s.appendChild(o); }
+    s.value = layer.id; $("baseWrap").hidden = false; $("baseCredit").textContent = layer.credit || "";
+    s.onchange = () => { layer = TILES.layers.find((l) => l.id === s.value); $("baseCredit").textContent = layer.credit || ""; dirty = true; };
+  }
+  $("showEdges").onchange = (e) => { filt.edges = e.target.checked; dirty = true; };
+  $("showHol").onchange = (e) => { filt.hol = e.target.checked; dirty = true; };
+  $("hostOnly").onchange = (e) => { filt.hostOnly = e.target.checked; dirty = true; };
+  $("minD").onchange = (e) => { filt.minD = +e.target.value; dirty = true; };
+
+  load();
+})();
+</script>
+
+</body>
+</html>
