@@ -71,7 +71,7 @@ python scripts/build_public_explorer.py --repo https://github.com/Michael-S-Phil
 python scripts/make_figures.py Mercury_MESSENGER_MDIS_Basemap_BDR_Mosaic_Global_166m.tif
 ```
 
-The three analysis scripts reproduce the records in `outputs/` exactly. The graph and tests take about a minute on a laptop; the tiles take about a minute from local mosaics.
+The three analysis scripts reproduce the records in `outputs/` to floating-point precision (differences of order 1e-5 relative or smaller across numpy/scipy/statsmodels versions). The graph and tests take about a minute on a laptop; the tiles take about a minute from local mosaics.
 
 ## Publishing
 
