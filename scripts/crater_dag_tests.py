@@ -5,7 +5,9 @@
 2. Regional context: the hosting rate of other craters within 500 km (leave-one-out) as a covariate.
 3. Within-parent comparison: conditional logit with parent groups (peak/floor vs wall children of the same parent).
 4. Inheritance: do children of hosting parents host more often?
-Usage: python3 scripts/crater_dag_tests.py [inputs folder]   (after crater_dag.py)"""
+Usage: python3 scripts/crater_dag_tests.py [inputs folder]   (after crater_dag.py)
+Reads and writes CRATER_DAG_OUT if set (default outputs/). Since v0.2.0 coefficients and standard errors are recorded
+unrounded (v0.1.0 rounded them to three decimals)."""
 import sys, os, json
 import numpy as np, pandas as pd
 from scipy.spatial import cKDTree
@@ -13,7 +15,7 @@ import statsmodels.formula.api as smf
 from statsmodels.discrete.conditional_models import ConditionalLogit
 HERE = os.path.dirname(os.path.abspath(__file__))
 INP = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "..", "inputs"))
-OUT = os.path.join(HERE, "..", "outputs")
+OUT = os.path.abspath(os.environ.get("CRATER_DAG_OUT", os.path.join(HERE, "..", "outputs")))
 n = pd.read_csv(f"{OUT}/crater_dag_nodes.csv.gz", dtype={"id": str, "parent_id": str})
 h = pd.read_csv(f"{INP}/hollows.csv", usecols=["host_uid", "rho"]).dropna()
 h["host_uid"] = h.host_uid.astype(int).astype(str)
@@ -33,7 +35,7 @@ R = {}
 def fit(formula, d, name, y="hosts"):
     mm = smf.logit(formula.replace("Y ~", f"{y} ~"), data=d).fit(disp=0)
     R[name] = dict(n=int(mm.nobs), events=int(d[y].sum()), aic=float(mm.aic),
-                   params={k: [round(float(v), 3), round(float(mm.bse[k]), 3), float(mm.pvalues[k])] for k, v in mm.params.items()})
+                   params={k: [float(v), float(mm.bse[k]), float(mm.pvalues[k])] for k, v in mm.params.items()})
     return mm
 ctrl = "logD + abslat + C1 + nsp + dT"
 for y in ["hosts", "h09", "h09_3"]:
@@ -59,7 +61,7 @@ w = w[w.parent_id.isin(keep)]
 X = pd.DataFrame({"inner": w.zone.isin(["peak", "floor"]).astype(float), "logD": w.logD, "C1": w.C1})
 cl = ConditionalLogit(w.h09.values, X.values, groups=w.parent_id.values).fit(disp=0)
 R["within_parent_clogit_h09"] = dict(parents=int(len(keep)), children=int(len(w)), events=int(w.h09.sum()),
-    params={nm: [round(float(b), 3), round(float(se), 3), float(p)] for nm, b, se, p in zip(X.columns, cl.params, cl.bse, cl.pvalues)},
+    params={nm: [float(b), float(se), float(p)] for nm, b, se, p in zip(X.columns, cl.params, cl.bse, cl.pvalues)},
     rates={"inner": f"{int(w[X.inner == 1].h09.sum())}/{int((X.inner == 1).sum())}", "wall": f"{int(w[X.inner == 0].h09.sum())}/{int((X.inner == 0).sum())}"})
 json.dump(R, open(f"{OUT}/crater_dag_tests_record.json", "w"), indent=1)
 for k, v in R.items():

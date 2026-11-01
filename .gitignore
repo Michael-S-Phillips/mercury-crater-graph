@@ -5,4 +5,4 @@ _to_delete/
 explorer/tiles/
 ._*
 .DS_Store
-RELEASE_PROMPT.md
+RELEASE_PROMPT*.md

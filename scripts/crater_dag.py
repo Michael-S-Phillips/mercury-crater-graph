@@ -8,14 +8,44 @@ contains it), so the graph is a forest.
 
 Depth of origin. An impact inside an earlier crater excavates and uplifts material that the earlier crater already brought
 up. For each crater the script estimates the deepest pre-impact level it exposes, z_max = z_base + z_own, where
-  z_own  = max(excavation depth 0.1 D_tc, stratigraphic uplift 0.086 D^1.03 for complex craters) (Croft 1985;
-           Cintala and Grieve 1998), with D_tc = D_sc^0.15 D^0.85, D_sc = 12 km (D_tc = D/1.2 for simple craters);
+  z_own  = max(excavation depth h_exc = 0.1 D_tc, stratigraphic uplift SU) (Croft 1985; Cintala and Grieve 1998), with
+           D_tc = D_sc^0.15 D^0.85, D_sc = 12 km (D_tc = D/1.2 for simple craters); SU = 0.086 D^1.03 for complex craters
+           with central peaks and SU = k_ring h_exc beneath features with peak-ring geometry (see Basins below);
   z_base = depth of origin of the parent's surface where the child formed: z_base(parent) + SU(parent) on the parent's
            peak (rho < 0.2), z_base(parent) + h_exc(parent) on its floor (0.2-0.6), z_base(parent) on its wall (>= 0.6),
            where rho is the child's center distance in parent radii. A child on a filled floor must first cut through
-           the fill (t_fill from the depth deficit against fresh craters, Section S7); a child whose excavation does not
-           exceed t_fill exposes only fill (fill_only).
+           the fill (t_fill from the depth deficit against fresh craters); a child whose excavation does not exceed t_fill
+           exposes only fill (fill_only).
 These are first-order scalings; the tests below ask only whether the extra depth from nesting predicts hosting.
+
+Caloris (since v0.2.0). The catalog crater 200153 (D = 1595 km, 31.93 N 164.10 E) and the Orgel et al. (2020) basin
+"Caloris" (D = 1556 km, 29.91 N 161.43 E) are the same feature, but their centers lie 130 km apart, beyond the 0.15-radius
+duplicate tolerance (117 km), so v0.1.0 kept both. One node now remains. By default (CRATER_DAG_CALORIS=catalog) it is the
+catalog record 200153, with its hollow-host flags and the Orgel center and diameter, and the Orgel row is dropped, as the
+duplicate step does for every other cataloged basin; CRATER_DAG_CALORIS=orgel keeps the Orgel record instead. Every feature
+inside either footprint (Orgel or catalog circle) is a child of the merged node. rho is measured from the Orgel center and
+radius, so children inside the catalog rim but beyond the Orgel rim have rho > 1 (zone wall). The Caloris fill stays 3.0 km.
+
+Basins (since v0.2.0). The central-peak uplift relations were fitted to craters with central peaks; extrapolated to
+Caloris they give 167 km (terrestrial) or 935 km (lunar) of uplift. Beneath features with peak-ring geometry the deepest
+origin of peak-ring and central material is set to SU = k_ring x 0.1 D_tc, with k_ring = 1.05, the midpoint of the range
+0.8-1.3 (79 km for Caloris). The rock of lunar peak rings came from near the maximum depth of excavation (Baker and Head
+2015); in hydrocode simulations the lithologies of Schrodinger's peak ring were uplifted from depths up to 30 km (Kring
+et al. 2016); and IODP-ICDP Expedition 364 drilled uplifted, shocked basement rock in Chicxulub's peak ring
+(Urrutia-Fucugauchi et al. 2019). Peak-ring geometry = Orgel et al. (2020) basins, Herrick et al. (2018) craters coded
+pr or pb, or any crater larger than D_pr = 120 km that is not coded cp or mp. Central-peak craters keep the uplift
+relation. The record also includes the numbers of craters and hosts whose z_max exceeds 17, 35, and 53 km (the
+crust-base range 35 +- 18 km of Padovan et al. 2015), where the exposed material would be mantle.
+
+Options (environment variables):
+  CRATER_DAG_SU      terrestrial (default, 0.086 D^1.03), lunar (0.022 D^1.45, Cintala and Grieve 1998 eq. 12), or
+                     double (2 x 0.086 D^1.03)
+  CRATER_DAG_BASIN   ring (default, the peak-ring relation above) or uplift (the v0.1.0 rule: the uplift relation for
+                     every complex crater, including basins)
+  CRATER_DAG_KRING   k_ring (default 1.05)
+  CRATER_DAG_DPR     D_pr in km (default 120)
+  CRATER_DAG_CALORIS catalog (default) or orgel
+  CRATER_DAG_OUT     output folder (default outputs/); crater_dag_tests.py and crater_dag_sens.py read it too
 
 Inputs (inputs/ folder of this repository; see inputs/README.md): Herrick et al. (2018) craters >= 5 km with hollow-host
 flags, Orgel et al. (2020) basins, crater floor depths from the USGS 665 m DEM, hollows with their host craters and radial
@@ -30,7 +60,11 @@ import statsmodels.formula.api as smf
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 INP = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "..", "inputs"))
-OUT = os.path.join(HERE, "..", "outputs"); os.makedirs(OUT, exist_ok=True)
+OUT = os.path.abspath(os.environ.get("CRATER_DAG_OUT", os.path.join(HERE, "..", "outputs"))); os.makedirs(OUT, exist_ok=True)
+CAL_MODE = os.environ.get("CRATER_DAG_CALORIS", "catalog"); SU_REL = os.environ.get("CRATER_DAG_SU", "terrestrial")
+assert CAL_MODE in ("catalog", "orgel") and SU_REL in ("terrestrial", "lunar", "double")
+BASIN_REL = os.environ.get("CRATER_DAG_BASIN", "ring"); K_RING = float(os.environ.get("CRATER_DAG_KRING", "1.05"))
+D_PR = float(os.environ.get("CRATER_DAG_DPR", "120")); assert BASIN_REL in ("ring", "uplift")
 R_M, DSC = 2439.4, 12.0
 sys.path.insert(0, HERE); import thermal
 
@@ -46,6 +80,16 @@ b = pd.DataFrame(dict(id="orgel_" + o.Basin_Name.astype(str), kind="basin", lat=
 def unit(lat, lon):
     la, lo = np.radians(lat), np.radians(lon)
     return np.c_[np.cos(la) * np.cos(lo), np.cos(la) * np.sin(lo), np.sin(la)]
+# v8: merge the two Caloris nodes (see docstring)
+ih = c.index[c.id == "200153"]; io = b.index[b.id == "orgel_Caloris"]
+assert len(ih) == 1 and len(io) == 1
+ih, io = ih[0], io[0]
+CAL_ORGEL = tuple(float(x) for x in b.loc[io, ["lat", "lon", "D"]])
+CAL_CAT = tuple(float(x) for x in c.loc[ih, ["lat", "lon", "D"]])
+if CAL_MODE == "catalog":
+    c.loc[ih, ["lat", "lon", "D"]] = list(CAL_ORGEL); b = b.drop(index=io); CAL_ID = "200153"
+else:
+    c = c.drop(index=ih); CAL_ID = "orgel_Caloris"
 uc, ub = unit(c.lat, c.lon), unit(b.lat, b.lon)
 # drop Orgel basins that duplicate a cataloged crater (near-concentric, similar size)
 dup = []
@@ -61,12 +105,17 @@ u = unit(n.lat, n.lon); D = n.D.values; r = D / 2
 # ---------------------------------------------------------------- containment (center inside a feature >= 2x larger)
 tree = cKDTree(u)
 parent = np.full(len(n), -1); rho = np.full(len(n), np.nan); ncont = np.zeros(len(n), int)
+p_cal = int(np.where(n.id.values == CAL_ID)[0][0])
+u_alt = unit(CAL_CAT[0], CAL_CAT[1])[0]; r_alt = CAL_CAT[2] / 2      # the catalog (Herrick) Caloris footprint
 for p in np.where(D >= 10)[0]:                       # D sorted descending: later (smaller) parents overwrite
-    hits = np.asarray(tree.query_ball_point(u[p], 2 * np.sin(min(r[p] / R_M, np.pi) / 2)))
+    rq = r[p] if p != p_cal else max(r[p], np.arccos(np.clip(u_alt @ u[p], -1, 1)) * R_M + r_alt)
+    hits = np.asarray(tree.query_ball_point(u[p], 2 * np.sin(min(rq / R_M, np.pi) / 2)))
     hits = hits[D[hits] <= D[p] / 2]
     if hits.size == 0: continue
     d = np.arccos(np.clip(u[hits] @ u[p], -1, 1)) * R_M
     inside = d < r[p]
+    if p == p_cal:                                   # union of the Orgel and catalog footprints
+        inside |= np.arccos(np.clip(u[hits] @ u_alt, -1, 1)) * R_M < r_alt
     hits, d = hits[inside], d[inside]
     ncont[hits] += 1
     parent[hits] = p; rho[hits] = d / r[p]
@@ -77,12 +126,17 @@ n["possible_ring"] = (parent >= 0) & (n.rho < 0.2) & (n.D >= 20) & (n.D / np.whe
 # ---------------------------------------------------------------- depth model
 Dtc = np.where(D > DSC, DSC ** 0.15 * D ** 0.85, D / 1.2)
 h_exc = 0.1 * Dtc
-SU = np.where(D > DSC, 0.086 * D ** 1.03, 0.0)
+SU = np.where(D > DSC, {"terrestrial": 0.086 * D ** 1.03, "lunar": 0.022 * D ** 1.45, "double": 2 * 0.086 * D ** 1.03}[SU_REL], 0.0)
+cent_ = n.cent.fillna("").astype(str).str.strip().str.lower().values
+peak_ring = (n.kind.values == "basin") | np.isin(cent_, ["pr", "pb"]) | (~np.isin(cent_, ["cp", "mp"]) & (D > D_PR))
+if BASIN_REL == "ring":
+    SU = np.where(peak_ring & (D > DSC), K_RING * h_exc, SU)
+n["peak_ring_geom"] = peak_ring
 z_own = np.maximum(h_exc, SU)
 m = pd.read_csv(f"{INP}/crater_floor_depths.csv")[["uid", "depth"]]
 m["id"] = m.uid.astype(str)
 n = n.merge(m[["id", "depth"]], on="id", how="left")
-d_fresh = 0.241 * D ** 0.486                          # km, 90th percentile depth of isolated craters (Section S7)
+d_fresh = 0.241 * D ** 0.486                          # km, 90th percentile depth of isolated craters
 t_fill = np.clip(d_fresh - n.depth.values / 1000, 0, None)     # NaN where no DEM depth (craters < 10 km, basins)
 t_fill = np.where(n.id == "200001", np.nan, t_fill)
 cal = n.index[(n.D > 1500) & (n.D < 1700) & (abs(n.lat - 31) < 3)]
@@ -137,6 +191,14 @@ pd.DataFrame(dict(older_id=n.id.values[E.parent.values], younger_id=E.id, older_
 
 # ---------------------------------------------------------------- tests (cataloged craters >= 5 km)
 R = {}
+ch = n[n.parent == p_cal]
+R["settings"] = dict(caloris_mode=CAL_MODE, caloris_kept=CAL_ID, caloris_geometry_lat_lon_D=CAL_ORGEL,
+                     caloris_catalog_geometry_lat_lon_D=CAL_CAT, uplift=SU_REL,
+                     caloris_children=int(len(ch)), caloris_children_beyond_orgel_rim=int((ch.rho >= 1).sum()),
+                     basin_relation=BASIN_REL, k_ring=K_RING, D_pr_km=D_PR, n_peak_ring_geom=int(n.peak_ring_geom.sum()),
+                     caloris_SU_km=float(n.SU.iat[p_cal]), caloris_z_own_km=float(n.z_own.iat[p_cal]),
+                     caloris_children_hosts=int(ch.hosts.sum()), caloris_t_fill=float(n.t_fill.iat[p_cal]),
+                     caloris_kind=str(n.kind.iat[p_cal]), caloris_hosts=None if pd.isna(n.hosts.iat[p_cal]) else int(n.hosts.iat[p_cal]))
 s = n[(n.kind == "crater") & (~n.possible_ring)].copy()
 s["nested"] = (s.parent >= 0).astype(int)
 s["ln_zown"] = np.log(s.z_own); s["ln_zmax"] = np.log(np.maximum(s.z_max, 0.05))
@@ -185,5 +247,8 @@ R["hollow_hosts"] = dict(n=int(len(hh)), hollows=int(hh.n_hollows.sum()),
                          frac_nested=float(hh.nested.mean()), frac_nested_all=float(s.nested.mean()),
                          z_base_median_nested_hosts=float(hh[hh.nested == 1].z_base.median()),
                          z_base_median_nested_all=float(s[s.nested == 1].z_base.median()))
+R["crust_base"] = {grp: {f"z_max_gt_{T}": int((d_.z_max > T).sum()) for T in (17, 35, 53)} | {"n": int(len(d_)), "z_max_max": float(d_.z_max.max())}
+                   for grp, d_ in [("all_craters", s), ("hosts", s[s.hosts == 1])]}
+R["crust_base"]["note"] = "z_max beyond a crust base of 35 +- 18 km (Padovan et al. 2015) would expose mantle"
 json.dump(R, open(f"{OUT}/crater_dag_record.json", "w"), indent=1)
 print(json.dumps(R, indent=1))

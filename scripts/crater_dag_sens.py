@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Sensitivity of the nesting and inheritance results (run after crater_dag.py and crater_dag_tests.py)."""
+"""Sensitivity of the nesting and inheritance results (run after crater_dag.py and crater_dag_tests.py).
+Reads and writes CRATER_DAG_OUT if set (default outputs/)."""
 import sys, os, json
 import numpy as np, pandas as pd
 from scipy.spatial import cKDTree
 import statsmodels.formula.api as smf
 HERE = os.path.dirname(os.path.abspath(__file__))
 INP = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "..", "inputs"))
-OUT = os.path.join(HERE, "..", "outputs")
+OUT = os.path.abspath(os.environ.get("CRATER_DAG_OUT", os.path.join(HERE, "..", "outputs")))
 n = pd.read_csv(f"{OUT}/crater_dag_nodes.csv.gz", dtype={"id": str, "parent_id": str})
 h = pd.read_csv(f"{INP}/hollows.csv", usecols=["host_uid", "rho"]).dropna(); h["host_uid"] = h.host_uid.astype(int).astype(str)
 n["h09"] = n.id.map(h[h.rho <= 0.9].host_uid.value_counts()).fillna(0).gt(0).astype(int)
